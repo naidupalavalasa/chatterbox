@@ -12,25 +12,24 @@ const Message = ({ message }) => {
     ref.current?.scrollIntoView({ behavior: "smooth" });
   }, [message]);
 
+  const isOwner = message.sender === currentUser?.attributes?.email;
+
   return (
-    <div
-      ref={ref}
-      className={`message ${message.senderId === currentUser.uid && "owner"}`}
-    >
+    <div ref={ref} className={`message ${isOwner ? "owner" : ""}`}>
       <div className="messageInfo">
         <img
           src={
-            message.senderId === currentUser.uid
-              ? currentUser.photoURL
-              : data.user.photoURL
+            isOwner
+              ? currentUser.avatarUrl || "/default-avatar.png"
+              : message.senderProfileImage || "/default-avatar.png"
           }
-          alt=""
+          alt="avatar"
         />
-        <span>just now</span>
+        <span>{new Date(message.timestamp).toLocaleTimeString()}</span>
       </div>
       <div className="messageContent">
-        <p>{message.text}</p>
-        {message.img && <img src={message.img} alt="" />}
+        <p>{message.content}</p>
+        {message.image && <img src={message.image} alt="attached" />}
       </div>
     </div>
   );

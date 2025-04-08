@@ -1,24 +1,33 @@
-import { doc, onSnapshot } from "firebase/firestore";
 import React, { useContext, useEffect, useState } from "react";
+import { API, graphqlOperation } from '@aws-amplify/api-graphql';
 import { ChatContext } from "../context/ChatContext";
-import { db } from "../firebase";
 import Message from "./Message";
+import { listMessagesByChatRoom } from "../graphql/customQueries"; // You will create this query
 
 const Messages = () => {
   const [messages, setMessages] = useState([]);
   const { data } = useContext(ChatContext);
 
   useEffect(() => {
-    const unSub = onSnapshot(doc(db, "chats", data.chatId), (doc) => {
-      doc.exists() && setMessages(doc.data().messages);
-    });
+    const fetchMessages = async () => {
+      try {
+        if (!data?.chatRoom?.id) return;
 
-    return () => {
-      unSub();
+        const res = await API.graphql(
+          graphqlOperation(listMessagesByChatRoom, {
+            chatRoomID: data.chatRoom.id,
+            sortDirection: "ASC", // oldest to newest
+          })
+        );
+
+        setMessages(res.data.listMessagesByChatRoom.items);
+      } catch (err) {
+        console.error("Failed to fetch messages:", err);
+      }
     };
-  }, [data.chatId]);
 
-  console.log(messages)
+    fetchMessages();
+  }, [data.chatRoom?.id]);
 
   return (
     <div className="messages">

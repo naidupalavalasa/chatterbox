@@ -1,0 +1,26 @@
+{
+  "dev": {
+    "awscloudformation": {
+      "AuthRoleName": "amplify-chatterbox-dev-020c3-authRole",
+      "UnauthRoleArn": "arn:aws:iam::116981769768:role/amplify-chatterbox-dev-020c3-unauthRole",
+      "AuthRoleArn": "arn:aws:iam::116981769768:role/amplify-chatterbox-dev-020c3-authRole",
+      "Region": "ap-south-1",
+      "DeploymentBucketName": "amplify-chatterbox-dev-020c3-deployment",
+      "UnauthRoleName": "amplify-chatterbox-dev-020c3-unauthRole",
+      "StackName": "amplify-chatterbox-dev-020c3",
+      "StackId": "arn:aws:cloudformation:ap-south-1:116981769768:stack/amplify-chatterbox-dev-020c3/d82f2ad0-147e-11f0-bde8-06e6350f4cd9",
+      "AmplifyAppId": "d2pn1xxlekoy5q"
+    },
+    "categories": {
+      "auth": {
+        "chatterbox473706be": {}
+      },
+      "api": {
+        "chatterbox": {}
+      },
+      "storage": {
+        "chatterstorage": {}
+      }
+    }
+  }
+}

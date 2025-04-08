@@ -1,0 +1,13 @@
+{
+  "resourceName": "chatterstorage",
+  "policyUUID": "3b9bcc36",
+  "bucketName": "chatterbox1",
+  "storageAccess": "auth",
+  "guestAccess": [],
+  "authAccess": [
+    "CREATE_AND_UPDATE",
+    "READ"
+  ],
+  "triggerFunction": "NONE",
+  "groupAccess": {}
+}

@@ -12,15 +12,21 @@ const Chat = () => {
   return (
     <div className="chat">
       <div className="chatInfo">
-        <span>{data.user?.displayName}</span>
+        <span>{data?.user?.displayName || "Select a chat"}</span>
         <div className="chatIcons">
-          <img src={Cam} alt="" />
-          <img src={Add} alt="" />
-          <img src={More} alt="" />
+          <img src={Cam} alt="Camera" />
+          <img src={Add} alt="Add" />
+          <img src={More} alt="More Options" />
         </div>
       </div>
-      <Messages />
-      <Input/>
+      {data?.chatRoomID ? (
+        <>
+          <Messages />
+          <Input />
+        </>
+      ) : (
+        <div className="noChatSelected">Please select a chat to start messaging.</div>
+      )}
     </div>
   );
 };

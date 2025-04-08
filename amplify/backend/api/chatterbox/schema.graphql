@@ -1,0 +1,33 @@
+type ChatRoom @model @auth(rules: [{ allow: owner }, { allow: public }]) {
+  id: ID!
+  name: String!
+  messages: [Message] @hasMany(indexName: "byChatRoom", fields: ["id"])
+}
+
+type Message
+  @model
+  @auth(rules: [{ allow: owner }, { allow: public }])
+  @key(name: "byChatRoom", fields: ["chatRoomID", "timestamp"]) {
+  id: ID!
+  content: String!
+  sender: String!
+  senderProfileImage: String
+  chatRoomID: ID!
+  timestamp: AWSDateTime
+  image: String
+}
+
+type User @model {
+  id: ID!
+  username: String!
+  email: String!
+  profileImage: String
+  createdAt: AWSDateTime
+}
+
+type UserChat @model {
+  id: ID!
+  userID: ID!
+  chatRoomID: ID!
+  createdAt: AWSDateTime
+}

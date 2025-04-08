@@ -1,17 +1,10 @@
 import React, { useContext, useState } from "react";
-import {
-  collection,
-  query,
-  where,
-  getDocs,
-  setDoc,
-  doc,
-  updateDoc,
-  serverTimestamp,
-  getDoc,
-} from "firebase/firestore";
-import { db } from "../firebase";
+import { API, graphqlOperation } from '@aws-amplify/api-graphql';
+import { listUsers } from "../graphql/queries";
+import { createChatRoom, createUserChat } from "../graphql/mutations";
 import { AuthContext } from "../context/AuthContext";
+import { v4 as uuid } from "uuid";
+
 const Search = () => {
   const [username, setUsername] = useState("");
   const [user, setUser] = useState(null);
@@ -20,62 +13,80 @@ const Search = () => {
   const { currentUser } = useContext(AuthContext);
 
   const handleSearch = async () => {
-    const q = query(
-      collection(db, "users"),
-      where("displayName", "==", username)
-    );
-
     try {
-      const querySnapshot = await getDocs(q);
-      querySnapshot.forEach((doc) => {
-        setUser(doc.data());
-      });
-    } catch (err) {
+      const userData = await API.graphql(
+        graphqlOperation(listUsers, {
+          filter: { username: { eq: username } }
+        })
+      );
+
+      const foundUser = userData.data.listUsers.items[0];
+
+      if (foundUser) {
+        setUser(foundUser);
+        setErr(false);
+      } else {
+        setErr(true);
+        setUser(null);
+      }
+    } catch (error) {
+      console.error("Search error:", error);
       setErr(true);
     }
   };
 
   const handleKey = (e) => {
-    e.code === "Enter" && handleSearch();
+    if (e.code === "Enter") handleSearch();
   };
 
   const handleSelect = async () => {
-    //check whether the group(chats in firestore) exists, if not create
     const combinedId =
-      currentUser.uid > user.uid
-        ? currentUser.uid + user.uid
-        : user.uid + currentUser.uid;
+      currentUser.username > user.username
+        ? currentUser.username + user.username
+        : user.username + currentUser.username;
+
     try {
-      const res = await getDoc(doc(db, "chats", combinedId));
-
-      if (!res.exists()) {
-        //create a chat in chats collection
-        await setDoc(doc(db, "chats", combinedId), { messages: [] });
-
-        //create user chats
-        await updateDoc(doc(db, "userChats", currentUser.uid), {
-          [combinedId + ".userInfo"]: {
-            uid: user.uid,
-            displayName: user.displayName,
-            photoURL: user.photoURL,
+      // Create a new chat room if one doesn't exist
+      const newChatRoom = await API.graphql(
+        graphqlOperation(createChatRoom, {
+          input: {
+            id: combinedId,
+            participants: [currentUser.username, user.username],
           },
-          [combinedId + ".date"]: serverTimestamp(),
-        });
+        })
+      );
 
-        await updateDoc(doc(db, "userChats", user.uid), {
-          [combinedId + ".userInfo"]: {
-            uid: currentUser.uid,
-            displayName: currentUser.displayName,
-            photoURL: currentUser.photoURL,
-          },
-          [combinedId + ".date"]: serverTimestamp(),
-        });
-      }
-    } catch (err) {}
+      // Create user-chat mapping
+      await Promise.all([
+        API.graphql(
+          graphqlOperation(createUserChat, {
+            input: {
+              id: uuid(),
+              userId: currentUser.username,
+              chatRoomID: combinedId,
+              lastMessage: "",
+            },
+          })
+        ),
+        API.graphql(
+          graphqlOperation(createUserChat, {
+            input: {
+              id: uuid(),
+              userId: user.username,
+              chatRoomID: combinedId,
+              lastMessage: "",
+            },
+          })
+        ),
+      ]);
 
-    setUser(null);
-    setUsername("")
+      setUser(null);
+      setUsername("");
+    } catch (error) {
+      console.error("Error selecting user/chat creation:", error);
+    }
   };
+
   return (
     <div className="search">
       <div className="searchForm">
@@ -90,9 +101,9 @@ const Search = () => {
       {err && <span>User not found!</span>}
       {user && (
         <div className="userChat" onClick={handleSelect}>
-          <img src={user.photoURL} alt="" />
+          <img src={user.profileImage || "/default-avatar.png"} alt="" />
           <div className="userChatInfo">
-            <span>{user.displayName}</span>
+            <span>{user.username}</span>
           </div>
         </div>
       )}

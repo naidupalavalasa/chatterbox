@@ -3,76 +3,62 @@ import Img from "../img/img.png";
 import Attach from "../img/attach.png";
 import { AuthContext } from "../context/AuthContext";
 import { ChatContext } from "../context/ChatContext";
-import {
-  arrayUnion,
-  doc,
-  serverTimestamp,
-  Timestamp,
-  updateDoc,
-} from "firebase/firestore";
-import { db, storage } from "../firebase";
+import { API, graphqlOperation } from '@aws-amplify/api-graphql';
+import { Storage } from '@aws-amplify/storage';
+
 import { v4 as uuid } from "uuid";
-import { getDownloadURL, ref, uploadBytesResumable } from "firebase/storage";
+import { createMessage } from "../graphql/mutations";
 
 const Input = () => {
   const [text, setText] = useState("");
   const [img, setImg] = useState(null);
+  const [isSending, setIsSending] = useState(false);
 
   const { currentUser } = useContext(AuthContext);
-  const { data } = useContext(ChatContext);
+  const { data } = useContext(ChatContext); // data.chatRoomID
 
   const handleSend = async () => {
+    if ((!text.trim() && !img) || isSending) return;
+
+    setIsSending(true);
+    let imageUrl = "";
+
     if (img) {
-      const storageRef = ref(storage, uuid());
-
-      const uploadTask = uploadBytesResumable(storageRef, img);
-
-      uploadTask.on(
-        (error) => {
-          //TODO:Handle Error
-        },
-        () => {
-          getDownloadURL(uploadTask.snapshot.ref).then(async (downloadURL) => {
-            await updateDoc(doc(db, "chats", data.chatId), {
-              messages: arrayUnion({
-                id: uuid(),
-                text,
-                senderId: currentUser.uid,
-                date: Timestamp.now(),
-                img: downloadURL,
-              }),
-            });
-          });
-        }
-      );
-    } else {
-      await updateDoc(doc(db, "chats", data.chatId), {
-        messages: arrayUnion({
-          id: uuid(),
-          text,
-          senderId: currentUser.uid,
-          date: Timestamp.now(),
-        }),
-      });
+      const fileName = `${uuid()}_${img.name}`;
+      try {
+        await Storage.put(fileName, img, {
+          contentType: img.type,
+        });
+        imageUrl = await Storage.get(fileName);
+      } catch (error) {
+        console.error("Error uploading file: ", error);
+        setIsSending(false);
+        return;
+      }
     }
 
-    await updateDoc(doc(db, "userChats", currentUser.uid), {
-      [data.chatId + ".lastMessage"]: {
-        text,
-      },
-      [data.chatId + ".date"]: serverTimestamp(),
-    });
+    try {
+      const messageInput = {
+        id: uuid(),
+        content: text.trim(),
+        sender: currentUser?.attributes?.email || currentUser?.username,
+        senderProfileImage: currentUser?.attributes?.picture || "", // assumes avatar from Cognito or user pool
+        chatRoomID: data.chatRoomID,
+        timestamp: new Date().toISOString(),
+        image: imageUrl || null,
+      };
 
-    await updateDoc(doc(db, "userChats", data.user.uid), {
-      [data.chatId + ".lastMessage"]: {
-        text,
-      },
-      [data.chatId + ".date"]: serverTimestamp(),
-    });
+      await API.graphql(graphqlOperation(createMessage, { input: messageInput }));
 
-    setText("");
-    setImg(null);
+      setText("");
+      setImg(null);
+    } catch (err) {
+      console.error("Error sending message:", err);
+    }
+
+    setIsSending(false);
   };
+
   return (
     <div className="input">
       <input
@@ -80,9 +66,10 @@ const Input = () => {
         placeholder="Type something..."
         onChange={(e) => setText(e.target.value)}
         value={text}
+        disabled={isSending}
       />
       <div className="send">
-        <img src={Attach} alt="" />
+        <img src={Attach} alt="Attach" />
         <input
           type="file"
           style={{ display: "none" }}
@@ -90,9 +77,11 @@ const Input = () => {
           onChange={(e) => setImg(e.target.files[0])}
         />
         <label htmlFor="file">
-          <img src={Img} alt="" />
+          <img src={Img} alt="Upload" />
         </label>
-        <button onClick={handleSend}>Send</button>
+        <button onClick={handleSend} disabled={isSending}>
+          {isSending ? "Sending..." : "Send"}
+        </button>
       </div>
     </div>
   );

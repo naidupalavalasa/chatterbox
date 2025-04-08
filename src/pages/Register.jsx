@@ -1,10 +1,14 @@
 import React, { useState } from "react";
 import Add from "../img/addAvatar.png";
-import { createUserWithEmailAndPassword, updateProfile } from "firebase/auth";
-import { auth, db, storage } from "../firebase";
-import { ref, uploadBytesResumable, getDownloadURL } from "firebase/storage";
-import { doc, setDoc } from "firebase/firestore";
+
+import { Auth } from '@aws-amplify/auth';
+import { API, graphqlOperation } from '@aws-amplify/api-graphql';
+import { Storage } from '@aws-amplify/storage';
+
+
 import { useNavigate, Link } from "react-router-dom";
+import { v4 as uuid } from "uuid";
+import { createUser } from "../graphql/mutations";
 
 const Register = () => {
   const [err, setErr] = useState(false);
@@ -12,51 +16,53 @@ const Register = () => {
   const navigate = useNavigate();
 
   const handleSubmit = async (e) => {
-    setLoading(true);
     e.preventDefault();
+    setLoading(true);
+    setErr(false);
+
     const displayName = e.target[0].value;
     const email = e.target[1].value;
     const password = e.target[2].value;
     const file = e.target[3].files[0];
 
     try {
-      //Create user
-      const res = await createUserWithEmailAndPassword(auth, email, password);
-
-      //Create a unique image name
-      const date = new Date().getTime();
-      const storageRef = ref(storage, `${displayName + date}`);
-console.log("1");
-      await uploadBytesResumable(storageRef, file).then(() => {
-        getDownloadURL(storageRef).then(async (downloadURL) => {
-          try {
-            //Update profile
-            console.log("2");
-            await updateProfile(res.user, {
-              displayName,
-              photoURL: downloadURL,
-            });
-            //create user on firestore
-            console.log("3");
-            await setDoc(doc(db, "users", res.user.uid), {
-              uid: res.user.uid,
-              displayName,
-              email,
-              photoURL: downloadURL,
-            });
-            console.log("4");
-            //create empty user chats on firestore
-await setDoc(doc(db, "userChats", res.user.uid), {});
-
-            navigate("/");
-          } catch (err) {
-            console.log(err);
-            setErr(true);
-            setLoading(false);
-          }
-        });
+      // Step 1: Sign up with Cognito
+      const { user } = await Auth.signUp({
+        username: email,
+        password,
+        attributes: {
+          email,
+          name: displayName,
+        },
       });
-    } catch (err) {
+
+      let photoURL = "";
+
+      // Step 2: Upload avatar to S3
+      if (file) {
+        const fileName = `${uuid()}_${file.name}`;
+        await Storage.put(fileName, file, {
+          contentType: file.type,
+        });
+        photoURL = await Storage.get(fileName);
+      }
+
+      // Step 3: Save user to database
+      await API.graphql(
+        graphqlOperation(createUser, {
+          input: {
+            id: user.username,  // Cognito username is usually the sub
+            email,
+            displayName,
+            photoURL,
+          },
+        })
+      );
+
+      // Step 4: Redirect
+      navigate("/login");
+    } catch (error) {
+      console.error("Registration error:", error);
       setErr(true);
       setLoading(false);
     }
@@ -68,20 +74,20 @@ await setDoc(doc(db, "userChats", res.user.uid), {});
         <span className="logo">Chat Me</span>
         <span className="title">Register</span>
         <form onSubmit={handleSubmit}>
-          <input required type="text" placeholder="display name" />
-          <input required type="email" placeholder="email" />
-          <input required type="password" placeholder="password" />
+          <input required type="text" placeholder="Display Name" />
+          <input required type="email" placeholder="Email" />
+          <input required type="password" placeholder="Password" />
           <input required style={{ display: "none" }} type="file" id="file" />
           <label htmlFor="file">
-            <img src={Add} alt="" />
+            <img src={Add} alt="Add avatar" />
             <span>Add an avatar</span>
           </label>
           <button disabled={loading}>Sign up</button>
-          {loading && "Uploading and compressing the image please wait..."}
-          {err && <span>Something went wrong</span>}
+          {loading && <span>Uploading and setting up, please wait...</span>}
+          {err && <span>Something went wrong. Try again.</span>}
         </form>
         <p>
-          You do have an account? <Link to="/">Login</Link>
+          Already have an account? <Link to="/">Login</Link>
         </p>
       </div>
     </div>
